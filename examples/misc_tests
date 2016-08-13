@@ -1,0 +1,56 @@
+#!/usr/bin/env ruby
+
+require 'pp'
+require 'soa_msg'
+
+driver = SOAMSG::Driver.new(debug: false)
+
+# monitor = SOAMSG::Monitor.new driver
+
+driver.subscribe(
+  name: 'lambie',
+  service: lambda do |_message|
+    sleep 0.2
+    raise StandardError, 'random explosion' if rand(4) == 0
+    'lambie/response'
+  end
+)
+
+driver.subscribe(
+  debug: false,
+  name: 'got',
+  publisher_spec: 'lambie',
+  thread_count: 2
+) do |msg|
+  sleep 0.3
+  puts "anon-1 #{msg}"
+  nil
+end
+
+driver.subscribe(
+  message_spec: ['h**', '**::hello'],
+  name: 'inline_bob'
+) do |message|
+  puts "inline_bob received: #{message} from #{message.publisher}"
+  puts "            payload: #{message.payload}" if message.payload
+  message << 'arbitrary object sent via Message'
+  message.payload += 1 if message.payload.is_a?(Numeric)
+  message.merge 'new/message'
+end
+
+Thread.new do
+  5.times do
+    driver << 'publish/thread'
+    sleep 0.15
+  end
+end
+
+first_message = driver << ['hi/bob', 1]
+sleep 0.2
+driver << ['hello/jim', 'pot']
+sleep 0.2
+driver << ['hola/xxx', 'stew']
+
+puts "Shift-back from first message #{first_message.shift(2)}"
+
+sleep 1
